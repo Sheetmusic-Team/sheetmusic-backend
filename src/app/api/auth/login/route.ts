@@ -82,6 +82,25 @@ export async function POST(req: NextRequest) {
     }
 
     // ========================================
+    // REGISTER ACTIVITY SESSION (login)
+    // ========================================
+    try {
+      const { data: activityInsert, error: activityError } = await drl
+        .from('user_activity_sessions')
+        .insert({ student_id: student.id })
+        .select()
+        .maybeSingle()
+
+      if (activityError) {
+        console.warn('[Login] Could not insert user_activity_sessions row:', activityError)
+      } else {
+        console.log('[Login] activity session created:', activityInsert)
+      }
+    } catch (e) {
+      console.warn('[Login] activity insert failed:', e)
+    }
+
+    // ========================================
     // RESPONSE OK
     // ========================================
     return NextResponse.json(
