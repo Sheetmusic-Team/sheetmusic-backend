@@ -83,8 +83,7 @@ export async function POST(req: NextRequest) {
     if (!student) {
       return NextResponse.json(
         { error: 'Estudiante no encontrado en DRL' },
-        { status: 404 },
-        { headers: corsHeaders }
+        { status: 404, headers: corsHeaders }
       )
     }
 
