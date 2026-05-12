@@ -57,7 +57,9 @@ export async function POST(req: NextRequest) {
         password: body.password
       })
 
-    if (authError || !data.session || !data.user) {
+    if (authError || !data?.session || !data?.user) {
+      console.warn('[LOGIN] Supabase auth error:', authError)
+      console.warn('[LOGIN] Supabase auth response data:', data)
       return NextResponse.json(
         { error: 'Credenciales inválidas' },
         { status: 401, headers: corsHeaders }
