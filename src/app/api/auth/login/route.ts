@@ -6,36 +6,51 @@ interface LoginRequest {
   password: string
 }
 
+// ================================
+// CORS CONFIG
+// ================================
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "https://music-exercises-module.vercel.app",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+}
+
+// ================================
+// OPTIONS (PRE-FLIGHT CORS)
+// ================================
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders,
+  })
+}
+
+// ================================
+// POST LOGIN
+// ================================
 export async function POST(req: NextRequest) {
   try {
-    // Log the incoming request (body + headers)
     let body: LoginRequest
+
     try {
       body = (await req.json()) as LoginRequest
       console.log('=== incoming request (auth/login) ===')
-      console.log('method: POST')
-      console.log('url:', req.url)
-      console.log('headers:', Object.fromEntries(req.headers.entries()))
       console.log('body:', body)
       console.log('=== end request ===')
     } catch (e) {
-      console.warn('Could not parse login request body for logging:', e)
+      console.warn('Could not parse request body:', e)
       body = { email: '', password: '' }
     }
 
-    // ========================================
-    // VALIDACIÓN BÁSICA
-    // ========================================
+    // VALIDACIÓN
     if (!body.email || !body.password) {
       return NextResponse.json(
         { error: 'Email y contraseña requeridos' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       )
     }
 
-    // ========================================
     // AUTH SUPABASE
-    // ========================================
     const { data, error: authError } =
       await supabaseAuth.auth.signInWithPassword({
         email: body.email,
@@ -43,90 +58,71 @@ export async function POST(req: NextRequest) {
       })
 
     if (authError || !data.session || !data.user) {
-      console.error('AUTH ERROR:', authError)
-
       return NextResponse.json(
         { error: 'Credenciales inválidas' },
-        { status: 401 }
+        { status: 401, headers: corsHeaders }
       )
     }
 
     const userId = data.user.id
 
-    console.log('AUTH USER ID:', userId)
-
-    // ========================================
-    // BUSCAR STUDENT EN DRL SCHEMA
-    // ========================================
+    // DRL STUDENT
     const { data: student, error: studentError } = await drl
       .from('students')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle()
 
-    console.log('STUDENT:', student)
-    console.log('STUDENT ERROR:', studentError)
-
     if (studentError) {
       return NextResponse.json(
         { error: studentError.message },
-        { status: 500 }
+        { status: 500, headers: corsHeaders }
       )
     }
 
     if (!student) {
       return NextResponse.json(
         { error: 'Estudiante no encontrado en DRL' },
-        { status: 404 }
+        { status: 404 },
+        { headers: corsHeaders }
       )
     }
 
-    // ========================================
-    // REGISTER ACTIVITY SESSION (login)
-    // ========================================
-    try {
-      const { data: activityInsert, error: activityError } = await drl
-        .from('user_activity_sessions')
-        .insert({ student_id: student.id })
-        .select()
-        .maybeSingle()
+    // ACTIVITY LOG (no crítico)
+    await drl
+      .from('user_activity_sessions')
+      .insert({ student_id: student.id })
 
-      if (activityError) {
-        console.warn('[Login] Could not insert user_activity_sessions row:', activityError)
-      } else {
-        console.log('[Login] activity session created:', activityInsert)
-      }
-    } catch (e) {
-      console.warn('[Login] activity insert failed:', e)
-    }
-
-    // ========================================
     // RESPONSE OK
-    // ========================================
     return NextResponse.json(
       {
         accessToken: data.session.access_token,
         refreshToken: data.session.refresh_token,
-
         user: {
           id: userId,
           email: data.user.email
         },
-
         student: {
           id: student.id,
           name: student.name,
           user_id: student.user_id
         }
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: corsHeaders
+      }
     )
+
   } catch (error) {
     console.error('LOGIN ERROR:', error)
 
     return NextResponse.json(
       { error: 'Error interno del servidor' },
-      { status: 500 }
+      {
+        status: 500,
+        headers: corsHeaders
+      }
     )
   }
 }
