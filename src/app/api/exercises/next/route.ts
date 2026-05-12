@@ -6,6 +6,7 @@ import {
 } from '@/services/studentService'
 import { callDRLNextExercise } from '@/services/drlService'
 import { logRequest } from '@/lib/logRequest'
+import { drl } from '@/lib/supabase'
 
 interface NextExerciseRequestBody {
   focus?: {
@@ -75,12 +76,27 @@ export async function GET(request: NextRequest) {
   // 📊 STATE DRL
   const studentState = (await getStudentState(student_id)) as LocalStudentState
 
+    // Read skill_proficiency JSONB from DB directly (column: student_proficiency.skill_proficiency)
+    let skill_proficiency: Record<string, number> = studentState.skill_proficiency || {}
+    try {
+      const { data: profRow, error: profErr } = await drl
+        .from('student_proficiency')
+        .select('skill_proficiency')
+        .eq('student_id', student_id)
+        .single()
+      if (!profErr && profRow && typeof profRow['skill_proficiency'] === 'object') {
+        skill_proficiency = profRow['skill_proficiency'] as Record<string, number>
+      }
+    } catch (e) {
+      console.warn('Could not read student_proficiency row, falling back to getStudentState', e)
+    }
+
     // 🧠 DRL PREDICTION
     // Build the request body matching the expected DRL API shape
     const drlPayload = {
       student_id,
       student_state: {
-        skill_proficiency: studentState.skill_proficiency,
+        skill_proficiency: skill_proficiency,
         preferred_node: studentState.preferred_node ?? null,
         difficulty: studentState.difficulty ?? null,
         free_navigation: true
@@ -144,11 +160,26 @@ export async function POST(request: NextRequest) {
 
     console.log('FOCUS:', body.focus)
 
+    // Read skill_proficiency from DB for POST as well
+    let skill_proficiency_post: Record<string, number> = studentState.skill_proficiency || {}
+    try {
+      const { data: profRow, error: profErr } = await drl
+        .from('student_proficiency')
+        .select('skill_proficiency')
+        .eq('student_id', student_id)
+        .single()
+      if (!profErr && profRow && typeof profRow['skill_proficiency'] === 'object') {
+        skill_proficiency_post = profRow['skill_proficiency'] as Record<string, number>
+      }
+    } catch (e) {
+      console.warn('Could not read student_proficiency row for POST, falling back to getStudentState', e)
+    }
+
     // 🧠 DRL CALL (AQUÍ SE CONSTRUYE EL BODY SEGÚN EL FORMATO REQUERIDO)
     const postPayload = {
       student_id,
       student_state: {
-        skill_proficiency: studentState.skill_proficiency,
+        skill_proficiency: skill_proficiency_post,
         preferred_node: studentState.preferred_node ?? null,
         difficulty: studentState.difficulty ?? null,
         free_navigation: true

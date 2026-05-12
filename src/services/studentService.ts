@@ -51,7 +51,7 @@ export async function getStudentProfile(
   // Try to read the JSONB row; if missing, create a default with zeros for all known nodes.
   const { data: profRow, error: profRowError } = await drl
     .from('student_proficiency')
-    .select('skill_proficiency, skill_profiency')
+    .select('skill_proficiency')
     .eq('student_id', student_id)
     .single()
 
@@ -74,9 +74,13 @@ export async function getStudentProfile(
 
   if (profRow) {
   const profRowTyped = profRow as Record<string, unknown>
-  const raw = profRowTyped['skill_profiency'] ?? profRowTyped['skill_proficiency']
+  const raw = profRowTyped['skill_proficiency']
     if (raw && typeof raw === 'object') {
-      proficienciesObj = raw as Record<string, number>
+      // Normalize incoming keys to lowercase to keep a consistent schema
+      const rawObj = raw as Record<string, unknown>
+      proficienciesObj = Object.fromEntries(
+        Object.entries(rawObj).map(([k, v]) => [String(k).toLowerCase(), typeof v === 'number' ? v : Number(v) || 0])
+      ) as Record<string, number>
     } else {
       // if the row exists but column is empty/malformed, fall back to creating defaults
       proficienciesObj = await buildDefaultProficiencies(student_id)
@@ -99,7 +103,7 @@ export async function getStudentProfile(
       }
 
       nodeIds.forEach((id) => {
-        proficienciesObj[id] = 0
+        proficienciesObj[String(id).toLowerCase()] = 0
       })
 
       // Insert a new row into student_proficiency with defaults
@@ -140,7 +144,9 @@ export async function getStudentState(student_id: string) {
 
   return {
     student_id: profile.id,
-    skill_proficiency: profile.proficiencies,
+    skill_proficiency: Object.fromEntries(
+      Object.entries(profile.proficiencies || {}).map(([k, v]) => [String(k).toLowerCase(), v])
+    ) as Record<string, number>,
     total_sessions: profile.total_sessions,
     created_at: profile.created_at
   }
@@ -191,22 +197,29 @@ export async function updateProficiencies(
   // We must fetch the current JSONB, apply the deltas (addition), and
   // persist the merged object back into student_proficiency.skill_proficiency
   try {
-    // Read existing row if any
-    const { data: profRow } = await drl
+    // Read existing row if any (log raw DB response for debugging)
+    const { data: profRow, error: profReadError } = await drl
       .from('student_proficiency')
-      .select('skill_proficiency, skill_profiency')
+      .select('skill_proficiency')
       .eq('student_id', student_id)
       .single()
+
+    console.info('[updateProficiencies] DB read result:', { profRow, profReadError })
 
     let current: Record<string, number> = {}
 
     if (profRow) {
-      const profRowTyped = profRow as Record<string, unknown>
-      const raw = profRowTyped['skill_profiency'] ?? profRowTyped['skill_proficiency']
+  const profRowTyped = profRow as Record<string, unknown>
+  const raw = profRowTyped['skill_proficiency']
       if (raw && typeof raw === 'object') {
-        current = raw as Record<string, number>
+        // Normalize existing proficiency keys to lowercase
+        const rawObj = raw as Record<string, unknown>
+        current = Object.fromEntries(
+          Object.entries(rawObj).map(([k, v]) => [String(k).toLowerCase(), typeof v === 'number' ? v : Number(v) || 0])
+        ) as Record<string, number>
       } else {
         // Malformed existing row: build defaults
+        console.warn('[updateProficiencies] existing row malformed, building defaults')
         current = await buildDefaultProficiencies(student_id)
       }
     } else {
@@ -214,17 +227,24 @@ export async function updateProficiencies(
       current = await buildDefaultProficiencies(student_id)
     }
 
-    // Merge deltas: add each delta to the current value (or start at 0)
+    // Normalize incoming deltas' keys to lowercase and merge by addition
     const merged: Record<string, number> = { ...current }
+    console.info(`updateProficiencies: current keys=${Object.keys(current).length}, incoming deltas=${Object.keys(proficiencies || {}).length}`)
+
+    // Detailed per-key log for auditing the merge
     for (const [node, delta] of Object.entries(proficiencies || {})) {
-      const prev = typeof merged[node] === 'number' ? merged[node] : 0
-      // Add delta and keep two decimals
-      const next = Math.round((prev + (delta ?? 0)) * 100) / 100
-      merged[node] = next
+      const key = String(node).toLowerCase()
+      const prev = typeof merged[key] === 'number' ? merged[key] : 0
+      const deltaNum = Number(delta) || 0
+      const next = Math.round((prev + deltaNum) * 100) / 100
+      console.info('[updateProficiencies] merge key=', key, { prev, delta: deltaNum, next })
+      merged[key] = next
     }
 
+    console.info('updateProficiencies: merged full object sample (first 50 keys)', Object.fromEntries(Object.entries(merged).slice(0,50)))
+
     // Persist merged object back to JSONB column
-    const { error } = await drl
+    const { data: upsertData, error: upsertError } = await drl
       .from('student_proficiency')
       .upsert(
         {
@@ -236,8 +256,10 @@ export async function updateProficiencies(
       )
       .select()
 
-    if (error) {
-      throw new Error(`Error updating proficiencies: ${error.message}`)
+    console.info('[updateProficiencies] upsert result:', { upsertError, upsertData })
+
+    if (upsertError) {
+      throw new Error(`Error updating proficiencies: ${upsertError.message}`)
     }
 
     return merged
@@ -402,9 +424,7 @@ async function buildDefaultProficiencies(student_id: string): Promise<Record<str
       .from('student_proficiency')
       .insert({
         student_id,
-        // try both column names in case the schema uses the misspelled one
         skill_proficiency: defaults,
-        skill_profiency: defaults,
         updated_at: new Date().toISOString()
       })
       .select()
