@@ -1,3 +1,4 @@
+// ...existing code...
 import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
@@ -26,3 +27,9 @@ export const drl = createClient(
   SUPABASE_URL,
   SUPABASE_KEY
 ).schema(DRL_SCHEMA)
+
+// Added for compatibility with existing imports elsewhere
+export const supabase = supabaseAuth
+export const supabaseKeyType: 'service_role' | 'anon' | null =
+  SUPABASE_SERVICE_ROLE_KEY ? 'service_role' : SUPABASE_ANON_KEY ? 'anon' : null
+// ...existing code...

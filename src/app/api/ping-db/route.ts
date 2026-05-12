@@ -1,5 +1,7 @@
 import { supabase, supabaseKeyType } from '@/lib/supabase'
 
+export const runtime = 'nodejs'
+
 export async function GET() {
   const diagnostics: Record<string, string | null> = {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ?? null,
@@ -12,21 +14,25 @@ export async function GET() {
   let info: string | null = null
 
   try {
+    // ⚠️ IMPORTANTE: evita schema() si no es necesario o puede fallar en producción
     const { data, error } = await supabase
-      .schema('drl_testing')
       .from('users')
       .select('id')
       .limit(1)
 
     if (error) {
+      reachable = false
       info = `supabase query error: ${error.message}`
     } else {
       reachable = true
-      info = `ok (${Array.isArray(data) ? data.length : 'n/a'} rows)`
+      info = `ok (${data?.length ?? 0} rows)`
     }
   } catch (e: unknown) {
-    if (e instanceof Error) info = e.message
-    else {
+    reachable = false
+
+    if (e instanceof Error) {
+      info = e.message
+    } else {
       try {
         info = JSON.stringify(e)
       } catch {
@@ -35,5 +41,9 @@ export async function GET() {
     }
   }
 
-  return Response.json({ diagnostics, reachable, info })
+  return Response.json({
+    diagnostics,
+    reachable,
+    info,
+  })
 }
