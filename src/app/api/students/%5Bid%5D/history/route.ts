@@ -11,12 +11,25 @@ import {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Record<string, string> | Promise<Record<string, string>> }
 ) {
   try {
+    // Normalizar params: algunas versiones/typedefs de Next usan Promise para context.params
+    const rawParams = context?.params as
+      | Record<string, string>
+      | Promise<Record<string, string>>
+      | undefined;
+
+    const isPromiseLike =
+      rawParams !== undefined && typeof (rawParams as { then?: unknown }).then === 'function';
+
+    const params: Record<string, string> = isPromiseLike
+      ? await rawParams
+      : (rawParams as Record<string, string> | undefined) ?? {};
+
     // 1️⃣ VERIFICAR AUTENTICACIÓN
     const authenticatedUserId = await getStudentIdFromAuth(request);
-    const requestedStudentId = params.id;
+    const requestedStudentId = String(params.id ?? '');
 
     if (!authenticatedUserId) {
       return NextResponse.json(
