@@ -1,35 +1,25 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { getCorsHeaders } from './lib/cors'
 
+// Global middleware to apply CORS for API routes
 export function middleware(request: NextRequest) {
-  const response = NextResponse.next();
+  const { pathname } = request.nextUrl
 
-  // Permitir requests desde localhost (desarrollo)
-  const origin = request.headers.get('origin');
-  const allowedOrigins = [
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'http://127.0.0.1:5173',
-    'http://127.0.0.1:3000',
-  ];
+  if (!pathname.startsWith('/api')) return NextResponse.next()
 
-  if (allowedOrigins.includes(origin || '')) {
-    response.headers.set('Access-Control-Allow-Origin', origin || '*');
+  const origin = request.headers.get('origin') || undefined
+
+  // Handle preflight
+  if (request.method === 'OPTIONS') {
+    return new NextResponse(null, { status: 204, headers: getCorsHeaders(origin) })
   }
 
-  response.headers.set(
-    'Access-Control-Allow-Methods',
-    'GET, POST, PUT, DELETE, OPTIONS, PATCH'
-  );
-  response.headers.set(
-    'Access-Control-Allow-Headers',
-    'Content-Type, Authorization'
-  );
-  response.headers.set('Access-Control-Allow-Credentials', 'true');
-
-  return response;
+  const res = NextResponse.next()
+  Object.entries(getCorsHeaders(origin)).forEach(([k, v]) => res.headers.set(k, v))
+  return res
 }
 
 export const config = {
   matcher: '/api/:path*',
-};
+}

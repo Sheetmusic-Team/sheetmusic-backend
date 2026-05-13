@@ -6,6 +6,7 @@ import {
 } from '@/services/studentService';
 import { callDRLSessionEnd } from '@/services/drlService';
 import { logRequest } from '@/lib/logRequest';
+import { getCorsHeaders } from '@/lib/cors';
 
 interface SessionEvent {
   node: string;
@@ -32,20 +33,28 @@ export async function POST(request: NextRequest) {
 
     if (!student_id) {
       console.warn('[SessionEnd] ❌ Unauthorized');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: getCorsHeaders(request.headers.get('origin') || undefined) });
     }
 
-    // 2. PARSE BODY
-    let body: SessionEndRequestBody;
+    // 2. PARSE BODY (moved to helper to reduce complexity)
+    async function parseRequestBody(): Promise<SessionEndRequestBody> {
+      try {
+        const b = await request.json();
+        console.log('[SessionEnd] 📦 Raw body parsed');
+        return b as SessionEndRequestBody;
+      } catch (err) {
+        console.error('[SessionEnd] ❌ Invalid JSON:', err);
+        throw new Error('INVALID_JSON');
+      }
+    }
 
+    let body: SessionEndRequestBody;
     try {
-      body = await request.json();
-      console.log('[SessionEnd] 📦 Raw body parsed');
-    } catch (err) {
-      console.error('[SessionEnd] ❌ Invalid JSON:', err);
+      body = await parseRequestBody();
+    } catch {
       return NextResponse.json(
         { error: 'Invalid JSON body' },
-        { status: 400 }
+        { status: 400, headers: getCorsHeaders(request.headers.get('origin') || undefined) }
       );
     }
 
@@ -60,7 +69,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. DRL CALL (solo si hay eventos)
-    let drlResult: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let drlResult: any = null;
 
     if (events.length > 0) {
       console.log('[SessionEnd] 🚀 Calling DRL...');
@@ -124,7 +134,7 @@ export async function POST(request: NextRequest) {
           drlResult?.next_recommendations ?? [],
         buffer_size: drlResult?.buffer_size ?? 0
       }
-    });
+    }, { headers: getCorsHeaders(request.headers.get('origin') || undefined) });
 
   } catch (error) {
     console.error('[SessionEnd] 💥 ERROR:', {
@@ -139,9 +149,13 @@ export async function POST(request: NextRequest) {
             ? error.message
             : 'Failed to process session end'
       },
-      { status: 500 }
+      { status: 500, headers: getCorsHeaders(request.headers.get('origin') || undefined) }
     );
   }
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return new Response(null, { status: 204, headers: getCorsHeaders(request.headers.get('origin') || undefined) })
 }
 
 export async function GET() {

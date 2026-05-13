@@ -7,6 +7,7 @@ import {
 import { callDRLNextExercise } from '@/services/drlService'
 import { logRequest } from '@/lib/logRequest'
 import { drl } from '@/lib/supabase'
+import { getCorsHeaders } from '@/lib/cors'
 
 interface NextExerciseRequestBody {
   focus?: {
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
     if (!student_id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
-        { status: 401 }
+        { status: 401, headers: getCorsHeaders(request.headers.get('origin') || undefined) }
       )
     }
 
@@ -120,7 +121,7 @@ export async function GET(request: NextRequest) {
           )
         }
       }
-    })
+    }, { headers: getCorsHeaders(request.headers.get('origin') || undefined) })
   } catch (error) {
     console.error('GET NEXT EXERCISE ERROR:', error)
 
@@ -131,7 +132,7 @@ export async function GET(request: NextRequest) {
             ? error.message
             : 'Failed to get next exercise'
       },
-      { status: 500 }
+      { status: 500, headers: getCorsHeaders(request.headers.get('origin') || undefined) }
     )
   }
 }
@@ -148,7 +149,7 @@ export async function POST(request: NextRequest) {
     if (!student_id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
-        { status: 401 }
+        { status: 401, headers: getCorsHeaders(request.headers.get('origin') || undefined) }
       )
     }
 
@@ -212,7 +213,7 @@ export async function POST(request: NextRequest) {
           )
         }
       }
-    })
+    }, { headers: getCorsHeaders(request.headers.get('origin') || undefined) })
   } catch (error) {
     console.error('POST NEXT EXERCISE ERROR:', error)
 
@@ -223,7 +224,12 @@ export async function POST(request: NextRequest) {
             ? error.message
             : 'Failed to get next exercise'
       },
-      { status: 500 }
+      { status: 500, headers: getCorsHeaders(request.headers.get('origin') || undefined) }
     )
   }
+}
+
+// OPTIONS preflight handler with explicit CORS headers
+export async function OPTIONS(request: NextRequest) {
+  return new Response(null, { status: 204, headers: getCorsHeaders(request.headers.get('origin') || undefined) })
 }

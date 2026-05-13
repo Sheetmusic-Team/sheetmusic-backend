@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
+import { getCorsHeaders } from '@/lib/cors'
 import { createClient } from '@supabase/supabase-js'
 
 // ========================================
@@ -27,8 +28,8 @@ const drl = supabase.schema(DRL_SCHEMA)
 // OPTIONS
 // ========================================
 
-export async function OPTIONS() {
-  return NextResponse.json({}, { status: 200 })
+export async function OPTIONS(req: NextRequest) {
+  return NextResponse.json({}, { status: 200, headers: getCorsHeaders(req.headers.get('origin') || undefined) })
 }
 
 // ========================================

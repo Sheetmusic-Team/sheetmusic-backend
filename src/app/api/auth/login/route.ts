@@ -1,27 +1,16 @@
 import { supabaseAuth, drl } from '@/lib/supabase'
 import { NextRequest, NextResponse } from 'next/server'
+import { getCorsHeaders } from '@/lib/cors'
 
 interface LoginRequest {
   email: string
   password: string
 }
 
-// ================================
-// CORS CONFIG
-// ================================
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "https://music-exercises-module.vercel.app",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-}
-
-// ================================
-// OPTIONS (PRE-FLIGHT CORS)
-// ================================
-export async function OPTIONS() {
+export async function OPTIONS(req: NextRequest) {
   return new Response(null, {
     status: 204,
-    headers: corsHeaders,
+    headers: getCorsHeaders(req.headers.get('origin') || undefined),
   })
 }
 
@@ -46,7 +35,7 @@ export async function POST(req: NextRequest) {
     if (!body.email || !body.password) {
       return NextResponse.json(
         { error: 'Email y contraseña requeridos' },
-        { status: 400, headers: corsHeaders }
+        { status: 400, headers: getCorsHeaders(req.headers.get('origin') || undefined) }
       )
     }
 
@@ -62,7 +51,7 @@ export async function POST(req: NextRequest) {
       console.warn('[LOGIN] Supabase auth response data:', data)
       return NextResponse.json(
         { error: 'Credenciales inválidas' },
-        { status: 401, headers: corsHeaders }
+        { status: 401, headers: getCorsHeaders(req.headers.get('origin') || undefined) }
       )
     }
 
@@ -78,14 +67,14 @@ export async function POST(req: NextRequest) {
     if (studentError) {
       return NextResponse.json(
         { error: studentError.message },
-        { status: 500, headers: corsHeaders }
+        { status: 500, headers: getCorsHeaders(req.headers.get('origin') || undefined) }
       )
     }
 
     if (!student) {
       return NextResponse.json(
         { error: 'Estudiante no encontrado en DRL' },
-        { status: 404, headers: corsHeaders }
+        { status: 404, headers: getCorsHeaders(req.headers.get('origin') || undefined) }
       )
     }
 
@@ -111,7 +100,7 @@ export async function POST(req: NextRequest) {
       },
       {
         status: 200,
-        headers: corsHeaders
+        headers: getCorsHeaders(req.headers.get('origin') || undefined)
       }
     )
 
@@ -120,10 +109,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(
       { error: 'Error interno del servidor' },
-      {
-        status: 500,
-        headers: corsHeaders
-      }
+      { status: 500, headers: getCorsHeaders(req.headers.get('origin') || undefined) }
     )
   }
 }
