@@ -106,14 +106,44 @@ export async function GET(request: NextRequest) {
 
     const drlPrediction = await callDRLNextExercise(drlPayload)
 
-    const exercise = normalizeExercise(drlPrediction.exercise_data) ?? drlPrediction.exercise_data;
+    const raw = drlPrediction.exercise_data
+    const normalized = (normalizeExercise(raw) ?? (typeof raw === 'object' ? (raw as Record<string, unknown>) : { prompt: String(raw) })) as Record<string, unknown>
+
+    // Create a flattened set of frequently used fields so clients that expect
+    // a flat shape won't break. Keep the full normalized object under `exercise`
+    // for clients that prefer that namespace.
+    const normalizedData = (normalized['data'] as Record<string, unknown> | null) ?? null
+    let normalizedCorrectIndex: number | null = null
+    if (typeof (normalized['correct_index'] as number) === 'number') {
+      normalizedCorrectIndex = (normalized['correct_index'] as number)
+    } else if (typeof (normalizedData?.['correct_index'] as number) === 'number') {
+      normalizedCorrectIndex = (normalizedData?.['correct_index'] as number)
+    }
+
+    const flat = {
+      prompt: (normalized['prompt'] as string) ?? null,
+      type: (normalized['type'] as string) ?? null,
+      data: normalizedData ?? null,
+      presentation_format: (normalized['presentation_format'] as string) ?? null,
+      expected_answer: (normalized['expected_answer'] as string) ?? null,
+      difficulty: (normalized['difficulty'] as number) ?? drlPrediction.difficulty ?? null,
+      correct_index: normalizedCorrectIndex
+    }
 
     return NextResponse.json({
       status: 'success',
       data: {
         node: drlPrediction.node,
         difficulty: drlPrediction.difficulty,
-        exercise,
+        // nested object preserved for newer clients
+        exercise: normalized,
+        // flat aliases for backwards compatibility
+        prompt: flat.prompt,
+        type: flat.type,
+        data: flat.data,
+        presentation_format: flat.presentation_format,
+        expected_answer: flat.expected_answer,
+        correct_index: flat.correct_index,
         metadata: {
           session_number: (studentState.total_sessions ?? 0) + 1,
           student_level: calculateStudentLevel(
@@ -197,14 +227,39 @@ export async function POST(request: NextRequest) {
 
     console.log('DRL RESULT:', drlPrediction)
 
-    const exercise = normalizeExercise(drlPrediction.exercise_data) ?? drlPrediction.exercise_data;
+    const raw = drlPrediction.exercise_data
+    const normalized = (normalizeExercise(raw) ?? (typeof raw === 'object' ? (raw as Record<string, unknown>) : { prompt: String(raw) })) as Record<string, unknown>
+
+    const normalizedData = (normalized['data'] as Record<string, unknown> | null) ?? null
+    let normalizedCorrectIndex: number | null = null
+    if (typeof (normalized['correct_index'] as number) === 'number') {
+      normalizedCorrectIndex = (normalized['correct_index'] as number)
+    } else if (typeof (normalizedData?.['correct_index'] as number) === 'number') {
+      normalizedCorrectIndex = (normalizedData?.['correct_index'] as number)
+    }
+
+    const flat = {
+      prompt: (normalized['prompt'] as string) ?? null,
+      type: (normalized['type'] as string) ?? null,
+      data: normalizedData ?? null,
+      presentation_format: (normalized['presentation_format'] as string) ?? null,
+      expected_answer: (normalized['expected_answer'] as string) ?? null,
+      difficulty: (normalized['difficulty'] as number) ?? drlPrediction.difficulty ?? null,
+      correct_index: normalizedCorrectIndex
+    }
 
     return NextResponse.json({
       status: 'success',
       data: {
         node: drlPrediction.node,
         difficulty: drlPrediction.difficulty,
-        exercise,
+        exercise: normalized,
+        prompt: flat.prompt,
+        type: flat.type,
+        data: flat.data,
+        presentation_format: flat.presentation_format,
+        expected_answer: flat.expected_answer,
+        correct_index: flat.correct_index,
         focus_applied: drlPrediction.focus_applied,
         metadata: {
           session_number: (studentState.total_sessions ?? 0) + 1,
