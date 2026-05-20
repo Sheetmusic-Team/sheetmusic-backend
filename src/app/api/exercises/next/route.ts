@@ -109,6 +109,26 @@ export async function GET(request: NextRequest) {
     const raw = drlPrediction.exercise_data
     const normalized = (normalizeExercise(raw) ?? (typeof raw === 'object' ? (raw as Record<string, unknown>) : { prompt: String(raw) })) as Record<string, unknown>
 
+    // Ensure feedback makes it into normalized.data so clients can reliably
+    // read feedback from ex.data.feedback regardless of generator shape.
+    try {
+      if (normalized) {
+        if (!normalized['data'] || typeof normalized['data'] !== 'object') {
+          normalized['data'] = {} as Record<string, unknown>
+        }
+        const nd = normalized['data'] as Record<string, unknown>
+        // If the generator placed feedback at top-level, copy it into data.feedback.
+        if (!nd['feedback'] && normalized['feedback']) {
+          nd['feedback'] = normalized['feedback']
+        }
+        // If feedback exists directly inside data already, prefer that.
+        // This guarantees normalized.data.feedback is populated when possible.
+      }
+    } catch (e) {
+      // non-fatal; proceed without forcing feedback
+      console.warn('Could not normalize feedback into normalized.data', e)
+    }
+
     // Create a flattened set of frequently used fields so clients that expect
     // a flat shape won't break. Keep the full normalized object under `exercise`
     // for clients that prefer that namespace.
